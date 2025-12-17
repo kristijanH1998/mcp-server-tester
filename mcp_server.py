@@ -13,9 +13,9 @@ app = FastMCP(
 )
 async def echo(message: str):
     return [
-        TextContent(text=f"Echo: {message}")
+        TextContent(type="text", text=f"Echo: {message}")
     ]
 
 if __name__ == "__main__":
-    asyncio.run(app.run())
-
+    # Run server with HTTP transport on port 8001
+    asyncio.run(app.run(transport="http", host="127.0.0.1", port=8001))

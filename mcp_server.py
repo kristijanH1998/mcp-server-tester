@@ -1,10 +1,12 @@
+# run with: python mcp_server.py
+
 from fastmcp import FastMCP
 from mcp.types import TextContent
 import asyncio
 
 app = FastMCP(
     name="test-mcp-server",
-    version="0.1.0",
+    version="0.1.0"
 )
 
 @app.tool(
@@ -17,5 +19,5 @@ async def echo(message: str):
     ]
 
 if __name__ == "__main__":
-    # Run server with HTTP transport on port 8001
+    # Run MCP server with HTTP transport
     asyncio.run(app.run(transport="http", host="127.0.0.1", port=8001))

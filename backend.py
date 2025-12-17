@@ -1,15 +1,25 @@
-from fastapi import FastAPI, HTTPException
+# run with: uvicorn backend:app --host 127.0.0.1 --port 8000
+
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastmcp import Client
 
 app = FastAPI()
 
-# Create a client pointing to your HTTP MCP server
+# Enable CORS for local frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],      # allow requests from any origin
+    allow_methods=["*"],      # allow GET, POST, OPTIONS, etc.
+    allow_headers=["*"],      # allow any headers
+)
+
+# MCP client pointing to HTTP MCP server
 client = Client("http://127.0.0.1:8001/mcp")
 
 @app.on_event("startup")
 async def startup():
-    # Connect on startup using async context
     await client.__aenter__()
 
 @app.on_event("shutdown")
@@ -28,5 +38,8 @@ class ToolCall(BaseModel):
 async def call_tool(req: ToolCall):
     return await client.call_tool(
         name=req.tool,
-        arguments=req.arguments,
+        arguments=req.arguments
     )
+
+
+

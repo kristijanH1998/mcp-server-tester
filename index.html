@@ -4,7 +4,8 @@
   <title>MCP Server Tester</title>
   <style>
     body { font-family: sans-serif; padding: 20px; }
-    textarea { width: 100%; height: 120px; }
+    textarea, input, select { width: 100%; margin-bottom: 10px; }
+    button { margin-bottom: 10px; }
     pre { background: #eee; padding: 10px; }
   </style>
 </head>
@@ -12,42 +13,87 @@
 
 <h1>MCP Server Tester</h1>
 
-<button onclick="loadTools()">Load Tools</button>
-<pre id="tools"></pre>
+<h3>Register MCP Server</h3>
+<input id="serverUrl" value="http://127.0.0.1:8001/mcp">
+<button onclick="registerServer()">Register</button>
 
-<h3>Call Tool</h3>
-<input id="tool" value="echo" />
+<h3>Servers</h3>
+<select id="servers" onchange="loadTools()"></select>
+
+<h3>Tools</h3>
+<select id="tools"></select>
+
+<h3>Arguments (JSON)</h3>
 <textarea id="args">{ "message": "Hello MCP" }</textarea>
-<button onclick="callTool()">Call</button>
 
-<h3>Response</h3>
-<pre id="response"></pre>
+<h3>Iterations</h3>
+<input id="iterations" type="number" value="10">
+
+<button onclick="runExperiment()">Run Experiment</button>
+
+<h3>Result</h3>
+<pre id="result"></pre>
 
 <script>
-const BASE_URL = "http://127.0.0.1:8000"; // backend URL
+const BASE = "http://127.0.0.1:8000";
+
+async function registerServer() {
+  const res = await fetch(`${BASE}/servers`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ url: document.getElementById("serverUrl").value })
+  });
+  await loadServers();
+}
+
+async function loadServers() {
+  const res = await fetch(`${BASE}/servers`);
+  const servers = await res.json();
+  const sel = document.getElementById("servers");
+  sel.innerHTML = "";
+  for (const id in servers) {
+    const opt = document.createElement("option");
+    opt.value = id;
+    opt.textContent = `${id.slice(0,8)} → ${servers[id]}`;
+    sel.appendChild(opt);
+  }
+}
 
 async function loadTools() {
-  const res = await fetch(`${BASE_URL}/tools`);
-  document.getElementById("tools").textContent =
-    JSON.stringify(await res.json(), null, 2);
+  const serverId = document.getElementById("servers").value;
+  const res = await fetch(`${BASE}/servers/${serverId}/tools`);
+  const tools = await res.json();
+  const sel = document.getElementById("tools");
+  sel.innerHTML = "";
+  tools.forEach(t => {
+    const opt = document.createElement("option");
+    opt.value = t.name;
+    opt.textContent = t.name;
+    sel.appendChild(opt);
+  });
 }
 
-async function callTool() {
-  const res = await fetch(`${BASE_URL}/call`, {
+async function runExperiment() {
+  const res = await fetch(`${BASE}/experiments`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
-      tool: document.getElementById("tool").value,
-      arguments: JSON.parse(document.getElementById("args").value)
+      server_id: document.getElementById("servers").value,
+      tool: document.getElementById("tools").value,
+      arguments: JSON.parse(document.getElementById("args").value),
+      iterations: parseInt(document.getElementById("iterations").value)
     })
   });
-
-  document.getElementById("response").textContent =
-    JSON.stringify(await res.json(), null, 2);
+  const data = await res.json();
+  document.getElementById("result").textContent =
+    JSON.stringify(data, null, 2);
 }
+
+loadServers();
 </script>
 
 </body>
 </html>
+
 
 

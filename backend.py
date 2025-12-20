@@ -5,12 +5,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from fastmcp import Client
 from uuid import uuid4
-from contextlib import asynccontextmanager
 from statistics import mean
 import time
 
 app = FastAPI()
 
+# -------------------------
+# CORS
+# -------------------------
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,22 +21,11 @@ app.add_middleware(
 )
 
 # -------------------------
-# In-memory storage (MVP)
+# In-memory state
 # -------------------------
 mcp_servers = {}      # server_id -> url
+mcp_clients = {}     # server_id -> Client
 experiments = {}     # experiment_id -> results
-
-# -------------------------
-# MCP client helper
-# -------------------------
-@asynccontextmanager
-async def mcp_client(url: str):
-    client = Client(url)
-    await client.__aenter__()
-    try:
-        yield client
-    finally:
-        await client.__aexit__(None, None, None)
 
 # -------------------------
 # Models
@@ -49,13 +40,39 @@ class ExperimentRequest(BaseModel):
     iterations: int
 
 # -------------------------
+# MCP helpers
+# -------------------------
+async def create_and_warm_client(url: str) -> Client:
+    """
+    Create a persistent MCP client and force full tool initialization.
+    """
+    client = Client(url)
+    await client.__aenter__()
+
+    # 🔥 CRITICAL: force handshake + tool discovery
+    try:
+        await client.list_tools()
+    except Exception:
+        pass
+
+    return client
+
+# -------------------------
 # Server registry
 # -------------------------
 @app.post("/servers")
 async def register_server(req: RegisterServer):
     server_id = str(uuid4())
+
+    client = await create_and_warm_client(req.url)
+
     mcp_servers[server_id] = req.url
-    return {"id": server_id, "url": req.url}
+    mcp_clients[server_id] = client
+
+    return {
+        "id": server_id,
+        "url": req.url,
+    }
 
 @app.get("/servers")
 async def list_servers():
@@ -66,40 +83,38 @@ async def list_servers():
 # -------------------------
 @app.get("/servers/{server_id}/tools")
 async def list_tools(server_id: str):
-    url = mcp_servers[server_id]
-    async with mcp_client(url) as client:
-        return await client.list_tools()
+    client = mcp_clients[server_id]
+    return await client.list_tools()
 
 # -------------------------
 # Experiments
 # -------------------------
 @app.post("/experiments")
 async def run_experiment(req: ExperimentRequest):
-    url = mcp_servers[req.server_id]
+    client = mcp_clients[req.server_id]
 
     timings = []
     responses = []
     errors = 0
 
-    async with mcp_client(url) as client:
-        for _ in range(req.iterations):
-            start = time.perf_counter()
-            try:
-                resp = await client.call_tool(
-                    name=req.tool,
-                    arguments=req.arguments
-                )
-                responses.append(resp)
-            except Exception as e:
-                errors += 1
-                responses.append({"error": str(e)})
-            finally:
-                timings.append(time.perf_counter() - start)
+    for _ in range(req.iterations):
+        start = time.perf_counter()
+        try:
+            resp = await client.call_tool(
+                name=req.tool,
+                arguments=req.arguments
+            )
+            responses.append(resp)
+        except Exception as e:
+            errors += 1
+            responses.append({"error": str(e)})
+        finally:
+            timings.append(time.perf_counter() - start)
 
     experiment_id = str(uuid4())
     result = {
         "experiment_id": experiment_id,
-        "server": url,
+        "server": mcp_servers[req.server_id],
         "tool": req.tool,
         "iterations": req.iterations,
         "avg_ms": mean(timings) * 1000,
@@ -114,6 +129,16 @@ async def run_experiment(req: ExperimentRequest):
 @app.get("/experiments/{experiment_id}")
 async def get_experiment(experiment_id: str):
     return experiments[experiment_id]
+
+# -------------------------
+# Graceful shutdown
+# -------------------------
+@app.on_event("shutdown")
+async def shutdown():
+    for client in mcp_clients.values():
+        await client.__aexit__(None, None, None)
+
+
 
 
 

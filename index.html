@@ -38,25 +38,40 @@
 const BASE = "http://127.0.0.1:8000";
 
 async function registerServer() {
-  const res = await fetch(`${BASE}/servers`, {
+  await fetch(`${BASE}/servers`, {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ url: document.getElementById("serverUrl").value })
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      url: document.getElementById("serverUrl").value
+    })
   });
-  await loadServers();
+
+  await loadServers(); // triggers tool loading
 }
 
 async function loadServers() {
   const res = await fetch(`${BASE}/servers`);
   const servers = await res.json();
   const sel = document.getElementById("servers");
+
   sel.innerHTML = "";
-  for (const id in servers) {
+
+  const ids = Object.keys(servers);
+  if (ids.length === 0) {
+    return;
+  }
+
+  for (const id of ids) {
     const opt = document.createElement("option");
     opt.value = id;
-    opt.textContent = `${id.slice(0,8)} → ${servers[id]}`;
+    opt.textContent = `${id.slice(0, 8)} → ${servers[id]}`;
     sel.appendChild(opt);
   }
+
+  // 🔥 CRITICAL FIX:
+  // Select first server and load tools explicitly
+  sel.value = ids[0];
+  await loadTools();
 }
 
 async function loadTools() {

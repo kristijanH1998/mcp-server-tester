@@ -18,4 +18,5 @@
 - Integrity of data sent in requests and responses is preserved using Python's Pydantic library. Time recording and mean calculation are performed with tools from statistics and time libraries. To implement the Model Context Protocol, the FastMCP framework is used.
 
 # AI Tools
-- ChatGPT was utilized for generating certain section of code, particularly the standard code structure for routes, middleware, and frontend HTML components. Google Gemini 
+- ChatGPT was utilized for generating certain sections of code, particularly the standard code structure for routes, middleware, and frontend HTML components. 
+- Google Gemini was used for general information on various frameworks and libraries required to build the application, researching main concepts of MCP client-server interaction and how MCP servers are used by LLMs.

@@ -34,6 +34,10 @@
 <h3>Result</h3>
 <pre id="result"></pre>
 
+<h3>Load Saved Experiment</h3>
+<input id="experimentId" placeholder="Paste experiment ID here" />
+<button onclick="loadExperiment()">Load</button>
+
 <script>
 const BASE = "http://127.0.0.1:8000";
 
@@ -91,7 +95,7 @@ async function loadTools() {
 async function runExperiment() {
   const res = await fetch(`${BASE}/experiments`, {
     method: "POST",
-    headers: {"Content-Type": "application/json"},
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       server_id: document.getElementById("servers").value,
       tool: document.getElementById("tools").value,
@@ -99,7 +103,29 @@ async function runExperiment() {
       iterations: parseInt(document.getElementById("iterations").value)
     })
   });
+
   const data = await res.json();
+
+  const url = `${BASE}/experiments/${data.experiment_id}`;
+
+  document.getElementById("result").innerHTML = `
+Experiment ID: ${data.experiment_id}
+
+View URL:
+${url}
+
+Result:
+${JSON.stringify(data, null, 2)}
+  `;
+}
+
+async function loadExperiment() {
+  const id = document.getElementById("experimentId").value.trim();
+  if (!id) return;
+
+  const res = await fetch(`${BASE}/experiments/${id}`);
+  const data = await res.json();
+
   document.getElementById("result").textContent =
     JSON.stringify(data, null, 2);
 }

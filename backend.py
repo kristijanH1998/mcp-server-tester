@@ -8,6 +8,16 @@ from uuid import uuid4
 from statistics import mean
 import time
 
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+BACKEND_HOST = os.getenv("BACKEND_HOST", "127.0.0.1")
+BACKEND_PORT = int(os.getenv("BACKEND_PORT", 8000))
+MAX_EXPERIMENT_ITERATIONS = int(os.getenv("MAX_EXPERIMENT_ITERATIONS", 100))
+CORS_ALLOW_ORIGINS = os.getenv("CORS_ALLOW_ORIGINS", "*")
+
 app = FastAPI()
 
 # -------------------------
@@ -15,7 +25,7 @@ app = FastAPI()
 # -------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[CORS_ALLOW_ORIGINS],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -91,6 +101,11 @@ async def list_tools(server_id: str):
 # -------------------------
 @app.post("/experiments")
 async def run_experiment(req: ExperimentRequest):
+    if req.iterations > MAX_EXPERIMENT_ITERATIONS:
+        return {
+            "error": f"iterations must be <= {MAX_EXPERIMENT_ITERATIONS}"
+        }
+
     client = mcp_clients[req.server_id]
 
     timings = []

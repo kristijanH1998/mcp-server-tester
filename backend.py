@@ -11,6 +11,11 @@ import time
 from dotenv import load_dotenv
 import os
 
+from db import init_db
+from db import get_conn
+from datetime import datetime
+import json
+
 load_dotenv()
 
 BACKEND_HOST = os.getenv("BACKEND_HOST", "127.0.0.1")
@@ -67,6 +72,20 @@ async def create_and_warm_client(url: str) -> Client:
 
     return client
 
+def serialize_call_result(result):
+    """
+    Convert CallToolResult into JSON-serializable data.
+    """
+    if hasattr(result, "content"):
+        return [
+            {
+                "type": c.type,
+                "text": getattr(c, "text", None)
+            }
+            for c in result.content
+        ]
+    return result
+
 # -------------------------
 # Server registry
 # -------------------------
@@ -75,14 +94,17 @@ async def register_server(req: RegisterServer):
     server_id = str(uuid4())
 
     client = await create_and_warm_client(req.url)
-
-    mcp_servers[server_id] = req.url
     mcp_clients[server_id] = client
+    mcp_servers[server_id] = req.url
 
-    return {
-        "id": server_id,
-        "url": req.url,
-    }
+    with get_conn() as conn:
+        conn.execute(
+            "INSERT INTO servers VALUES (?, ?, ?)",
+            (server_id, req.url, datetime.utcnow().isoformat())
+        )
+        conn.commit()
+
+    return {"id": server_id, "url": req.url}
 
 @app.get("/servers")
 async def list_servers():
@@ -119,7 +141,8 @@ async def run_experiment(req: ExperimentRequest):
                 name=req.tool,
                 arguments=req.arguments
             )
-            responses.append(resp)
+            responses.append(serialize_call_result(resp))
+
         except Exception as e:
             errors += 1
             responses.append({"error": str(e)})
@@ -139,11 +162,61 @@ async def run_experiment(req: ExperimentRequest):
     }
 
     experiments[experiment_id] = result
+
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO experiments VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                experiment_id,
+                req.server_id,
+                req.tool,
+                json.dumps(req.arguments),
+                req.iterations,
+                result["avg_ms"],
+                result["errors"],
+                json.dumps(result["timings_ms"]),
+                json.dumps(result["responses"]),
+                datetime.utcnow().isoformat(),
+            )
+        )
+        conn.commit()
+
     return result
 
 @app.get("/experiments/{experiment_id}")
 async def get_experiment(experiment_id: str):
-    return experiments[experiment_id]
+    from db import get_conn
+    import json
+
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM experiments WHERE id = ?",
+            (experiment_id,)
+        ).fetchone()
+
+    if not row:
+        return {"error": "experiment not found"}
+
+    (
+        id, server_id, tool, arguments,
+        iterations, avg_ms, errors,
+        timings_ms, responses, created_at
+    ) = row
+
+    return {
+        "experiment_id": id,
+        "server_id": server_id,
+        "tool": tool,
+        "arguments": json.loads(arguments),
+        "iterations": iterations,
+        "avg_ms": avg_ms,
+        "errors": errors,
+        "timings_ms": json.loads(timings_ms),
+        "responses": json.loads(responses),
+        "created_at": created_at,
+    }
 
 # -------------------------
 # Graceful shutdown
@@ -152,6 +225,21 @@ async def get_experiment(experiment_id: str):
 async def shutdown():
     for client in mcp_clients.values():
         await client.__aexit__(None, None, None)
+
+# -------------------------
+# Initialize database when starting the app
+# -------------------------
+@app.on_event("startup")
+async def startup():
+    init_db()
+
+    with get_conn() as conn:
+        rows = conn.execute("SELECT id, url FROM servers").fetchall()
+
+    for server_id, url in rows:
+        client = await create_and_warm_client(url)
+        mcp_servers[server_id] = url
+        mcp_clients[server_id] = client
 
 
 

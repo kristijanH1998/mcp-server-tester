@@ -64,8 +64,7 @@ that can occur when clients are created per request.
 
 Server registrations and experiment results are stored in memory:
 Pros: Simple, fast, and sufficient for an MVP.
-Cons: Data is lost on backend restart.
-Persistence (e.g., SQLite) was intentionally omitted to keep the scope minimal.
+Data is preserved on backend restart thanks to SQLite persistence.
 
 ### Experiment Execution
 
@@ -77,6 +76,10 @@ Parallel execution could be added in a future iteration.
 
 Runtime configuration (ports, limits, CORS) is handled via environment variables:
 Supports reproducibility and deployment flexibility. A .env.example file documents all required configuration.
+
+## Unit Tests
+
+Pytest is used to perform simple unit tests on server registration, client creation (with mock MCP client only to confirm accurate API and SQLite behavior), and database and backend functionality.
 
 ## Use of AI Coding Tools
 

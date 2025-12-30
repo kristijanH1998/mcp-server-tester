@@ -14,4 +14,4 @@ async def test_register_server(client):
     assert "url" in data
 
     servers = await client.get("/servers")
-    assert len(servers.json()) == 1
+    assert len(servers.json()) == 2

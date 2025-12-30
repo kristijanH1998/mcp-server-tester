@@ -30,4 +30,42 @@ async def client():
     ) as ac:
         yield ac
 
+class FakeMCPClient:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        pass
+
+    async def list_tools(self):
+        return [
+            {
+                "name": "echo",
+                "description": "Echo a message",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "message": {"type": "string"}
+                    },
+                    "required": ["message"]
+                }
+            }
+        ]
+
+    async def call_tool(self, name: str, arguments: dict):
+        return {
+            "content": [
+                {"type": "text", "text": arguments.get("message", "")}
+            ]
+        }
+
+@pytest.fixture(autouse=True)
+def mock_mcp(monkeypatch):
+    async def fake_create_and_warm_client(url: str):
+        return FakeMCPClient()
+
+    monkeypatch.setattr(
+        "backend.create_and_warm_client",
+        fake_create_and_warm_client
+    )
 

@@ -2,8 +2,9 @@ import sqlite3
 import json
 from pathlib import Path
 from datetime import datetime
+import os
 
-DB_PATH = Path("data.db")
+DB_PATH = Path(os.getenv("DB_PATH", "data.db"))
 
 def get_conn():
     return sqlite3.connect(DB_PATH)

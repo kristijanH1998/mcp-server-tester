@@ -1,3 +1,7 @@
+import pytest
+
+pytestmark = pytest.mark.asyncio
+
 async def test_register_server(client):
     resp = await client.post(
         "/servers",

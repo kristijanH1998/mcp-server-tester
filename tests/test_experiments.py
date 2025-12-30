@@ -1,3 +1,7 @@
+import pytest
+
+pytestmark = pytest.mark.asyncio
+
 async def test_experiment_persistence(client):
     # Register server
     server = await client.post(
